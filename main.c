@@ -10,6 +10,11 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include "main.h" // Header-Datei für Funktionen dieser Datei
+
+// Fehlerbehandlung
+#define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
+
 // Konstanten
 #define MAX 16 // Buffer-Memory Größe
 
@@ -61,14 +66,20 @@ int main(int argc, char** argv) {
     printf("Counter (im Buffer) ist %d. \n", p_rb -> count);
     
     // Threads starten
-    pthread_create(&threads[0], NULL, start_routine(), (void *)thread_id);
-    pthread_create(&threads[1], NULL, start_routine(), (void *)&thread_id[1]);
-    pthread_create(&threads[2], NULL, start_routine(), (void *)&thread_id[2]);
+    int thread0 = pthread_create(&threads[0], NULL, &thread_start, (void *)thread_id);
+    int thread1 = pthread_create(&threads[1], NULL, &thread_start, (void *)&thread_id[1]);
+    int thread2 = pthread_create(&threads[2], NULL, &thread_start, (void *)&thread_id[2]);
+    
+    // Fehlermeldung, wenn das Erstellen eines der Threads fehlschlägt.
+    if (thread0 != 0 || thread1 != 0 || thread2 != 0) {
+        handle_error("Fehler beim Erzeugen eines Threads");
+    } 
     
     //...
     
     // Threads joinen bzw. warten, bis alle Threads terminieren
-    for(int i = 0; i < 4; i++) {
+    int i;
+    for(i = 0; i < 4; i++) {
         pthread_join(threads[i], NULL);
     }
     printf("Ende (nach dem Join der Threads). \n");
@@ -158,11 +169,6 @@ void* read_rb(void *pid) {
     return (NULL);
 }
 
-/**
- * Temporäre Prozedur
- * @return 
- */
-int start_routine() {
-    //...
-    return 0;
+static void * thread_start(void *arg) {
+    return (NULL);
 }
