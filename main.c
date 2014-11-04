@@ -36,15 +36,15 @@ typedef struct {
     int count;
 } rb;
 rb x = {{0}, NULL, NULL, 0}; // Leerer Ringpuffer x
-rb *p_rb = &x; // Pointer auf Ringpuffer x
+rb *p_rb = &x; // Pointer auf Ringpuffer x (liefert die Adresse der ersten Stelle?!)
 
 #define p_start (int *)(p_rb->buffer) // Pointer auf erstes Element im Buffer
 #define p_end (int *)((p_rb->buffer) + MAX-1) // Pointer auf letztes Element im Buffer
 
-void* p_1_w(void *pid); // Prozess 1
-void* p_2_w(void *pid); // Prozess 2
-void* consumer(void *pid); // Consumer-Prozess
-void* control(void *pid); // Control-Prozess
+void* p_1_w(void *pid); // Prozess 1 //Thread
+void* p_2_w(void *pid); // Prozess 2 //Thread
+void* consumer(void *pid); // Consumer-Prozess //Thread
+void* control(void *pid); // Control-Prozess //Thread
 
 /**
  * Main
@@ -52,21 +52,21 @@ void* control(void *pid); // Control-Prozess
  * @param argv
  * @return EXIT_SUCCESS
  */
-int main(int argc, char** argv) {
-    pthread_t threads[4];
+int main(int argc, char** argv) { //der zweite Parameter ist ein Zeiger auf eine Adresse
+    pthread_t threads[4]; //Feld, welches vier Elemente enthält. z.B. wie thread_id[4] oben im Quellcode
     
     printf("Start der Simulation! \n");
     
     //...
     
-    p_rb->p_in = p_start; // Setzen von p_in Pointer im Buffer auf p_start
+    p_rb->p_in = p_start; // Setzen von p_in Pointer im Buffer auf p_start. auch p_rb.p_in = p_start möglich siehe RMP 08
     p_rb->p_out = p_start; // Setzen von p_out Pointer im Buffer auf p_start
     p_rb->count = 0; // Setzen von count im Buffer auf 0
     
     printf("Counter (im Buffer) ist %d. \n", p_rb -> count);
     
     // Threads starten
-    int thread0 = pthread_create(&threads[0], NULL, &write_c, (void *)thread_id);
+    int thread0 = pthread_create(&threads[0], NULL, &write_c, (void *)thread_id);  //thread_id liefert die Adresse des ersten Feldes
     int thread1 = pthread_create(&threads[1], NULL, &write_c, (void *)&thread_id[1]);
     int thread2 = pthread_create(&threads[2], NULL, &read_rb, (void *)&thread_id[2]);
     
