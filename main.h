@@ -11,7 +11,5 @@
 void* write_c(void *pid);
 void* read_rb(void *pid);
 
-static void * thread_start(void *arg);
-
 #endif	/* MAIN_H */
 
