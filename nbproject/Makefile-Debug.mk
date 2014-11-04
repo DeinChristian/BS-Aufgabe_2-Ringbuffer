@@ -39,7 +39,7 @@ OBJECTFILES= \
 
 
 # C Compiler Flags
-CFLAGS=-m64 -pthread
+CFLAGS=-pthread
 
 # CC Compiler Flags
 CCFLAGS=

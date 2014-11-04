@@ -37,7 +37,6 @@
       </toolsSet>
       <compileType>
         <cTool>
-          <architecture>2</architecture>
           <standard>3</standard>
           <commandlineTool>gcc</commandlineTool>
           <commandLine>-pthread</commandLine>
