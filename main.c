@@ -169,6 +169,11 @@ void* read_rb(void *pid) {
     return (NULL);
 }
 
+/**
+ * Wird als eigener Thread gestartet.
+ * @param arg
+ * @return 
+ */
 static void * thread_start(void *arg) {
     return (NULL);
 }

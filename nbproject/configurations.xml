@@ -31,11 +31,17 @@
   <confs>
     <conf name="Debug" type="1">
       <toolsSet>
-        <compilerSet>default</compilerSet>
+        <compilerSet>GNU|GNU</compilerSet>
         <dependencyChecking>true</dependencyChecking>
         <rebuildPropChanged>false</rebuildPropChanged>
       </toolsSet>
       <compileType>
+        <cTool>
+          <architecture>2</architecture>
+          <standard>3</standard>
+          <commandlineTool>gcc</commandlineTool>
+          <commandLine>-pthread</commandLine>
+        </cTool>
       </compileType>
       <item path="main.c" ex="false" tool="0" flavor2="0">
       </item>
