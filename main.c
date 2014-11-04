@@ -66,9 +66,9 @@ int main(int argc, char** argv) {
     printf("Counter (im Buffer) ist %d. \n", p_rb -> count);
     
     // Threads starten
-    int thread0 = pthread_create(&threads[0], NULL, &thread_start, (void *)thread_id);
-    int thread1 = pthread_create(&threads[1], NULL, &thread_start, (void *)&thread_id[1]);
-    int thread2 = pthread_create(&threads[2], NULL, &thread_start, (void *)&thread_id[2]);
+    int thread0 = pthread_create(&threads[0], NULL, &write_c, (void *)thread_id);
+    int thread1 = pthread_create(&threads[1], NULL, &write_c, (void *)&thread_id[1]);
+    int thread2 = pthread_create(&threads[2], NULL, &read_rb, (void *)&thread_id[2]);
     
     // Fehlermeldung, wenn das Erstellen eines der Threads fehlschlägt.
     if (thread0 != 0 || thread1 != 0 || thread2 != 0) {
@@ -166,14 +166,5 @@ void* read_rb(void *pid) {
         sleep(1);
     }
     
-    return (NULL);
-}
-
-/**
- * Wird als eigener Thread gestartet.
- * @param arg
- * @return 
- */
-static void * thread_start(void *arg) {
     return (NULL);
 }
