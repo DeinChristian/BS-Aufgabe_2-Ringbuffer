@@ -16,5 +16,7 @@ void* control(void *pid); // Control-Prozess //Thread
 void* write_c(void *pid, char *alphabet);
 void* read_rb(void *pid);
 
+char get_char();
+
 #endif	/* MAIN_H */
 

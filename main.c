@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <sched.h>
+#include <termios.h>
 
 #include "main.h" // Header-Datei für Funktionen dieser Datei
 
@@ -21,10 +22,8 @@
 
 // Thread Mutexe
 pthread_mutex_t rb_mutex = PTHREAD_MUTEX_INITIALIZER;
-//...
 pthread_cond_t not_empty_condvar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t not_full_condvar = PTHREAD_COND_INITIALIZER;
-//...
 
 // Variablen
 int thread_id[4] = {0, 1, 2, 3};
@@ -75,10 +74,10 @@ int main (int argc, char** argv) {
     printf("Counter (im Buffer) ist %d. \n", p_rb -> count);
     
     // Threads starten
-    int thread0 = pthread_create(&threads[0], &my_thread_attr, &p_1_w, (void *)thread_id);  //thread_id liefert die Adresse des ersten Feldes
-    int thread1 = pthread_create(&threads[1], &my_thread_attr, &p_2_w, (void *)&thread_id[1]);
-    int thread2 = pthread_create(&threads[2], &my_thread_attr, &consumer, (void *)&thread_id[2]);
-    int thread3 = pthread_create(&threads[3], &my_thread_attr, &control, (void *)&thread_id[3]);
+    int thread0 = pthread_create(&threads[0], NULL, &p_1_w, (void *)thread_id);  //thread_id liefert die Adresse des ersten Feldes
+    int thread1 = pthread_create(&threads[1], NULL, &p_2_w, (void *)&thread_id[1]);
+    int thread2 = pthread_create(&threads[2], NULL, &consumer, (void *)&thread_id[2]);
+    int thread3 = pthread_create(&threads[3], NULL, &control, (void *)&thread_id[3]);
     
     // Fehlermeldung, wenn das Erstellen eines der Threads fehlschlägt.
     if (thread0 != 0 || thread1 != 0 || thread2 != 0 || thread3 != 0) {
@@ -131,27 +130,30 @@ void* consumer(void *pid) {
  * @return NULL
  */
 void* control(void *pid) {
-    char c;
-    while(1){
-        switch( scanf("%c", &c) )
+    char chari;
+    do{
+        chari = get_char();
+        switch(chari)
         {
             case '1' : NULL; break;
             case '2' : NULL; break;
             case 'c' :
             case 'C' : NULL; break;
             case 'q' :
-            case 'Q' : pthread_exit((int*)&thread_id[0]);
+            case 'Q' : pthread_exit((int*)&thread_id[1]);
                        pthread_exit((int*)&thread_id[1]);
                        pthread_exit((int*)&thread_id[2]);
                        return (EXIT_SUCCESS);
 
-            case 'h' : NULL; break;
+            case 'h' : printf("\n Folgende Tastatureingaben sind erlaubt: \n ");
+                       printf(" 1: Start bzw. Stop von Poducer_1 \n ");
+                       printf(" 2: Start bzw. Stop von Poducer_2 \n");
+                       printf("c/C: Start bzw. Stop von Consumer \n");  
+                       printf("q/Q: Terminierung der Threads, sodass der Main_Thread das System beendet \n");
+                       printf("  h: diese Liste von möglichen Eingaben lierfern \n"); break;
             default : ;
         }  
-    }
-   
-//    printf("Start: Steuer-Thread mit Prozess-ID: %d. \n", *(int*)pid);
-   
+    } while(1);   
 }
 
 /**
@@ -161,9 +163,6 @@ void* control(void *pid) {
  */
 void* write_c(void *pid, char *alphabet) {
     int i = 0;
-//    int z_var = 0;
-    
-    
 //    printf("Start: Schreiben von Prozess %d. \n", *(int*)pid);
     
     while(1) {
@@ -183,19 +182,15 @@ void* write_c(void *pid, char *alphabet) {
         }
         
         if(alphabet[pos_in_alphabet] == '\0') { //ist das chararray (Alphabet) am Ende
-            pos_in_alphabet = 0;                       // dann setze es wieder auf den Anfang
+            pos_in_alphabet = 0;                // dann setze es wieder auf den Anfang
         } 
         sleep(3);
-        *(p_rb->p_in) = alphabet[pos_in_alphabet]; //p_rb->p_in ist Adresse *(p_rb->p_in) ist Inhalt der Adresse, und dieser wird auf z_var gesetzt
-        (p_rb->p_in)++; // die Adresse wird incrementiert -> hier um 4, weil int vier zeichen (chars ein zeichen)
+        *(p_rb->p_in) = alphabet[pos_in_alphabet];  //p_rb->p_in ist Adresse *(p_rb->p_in) ist Inhalt der Adresse, und dieser wird auf z_var gesetzt
+        (p_rb->p_in)++;     // die Adresse wird incrementiert -> hier um 4, weil int vier zeichen (chars ein zeichen)
         if(p_rb->p_in > p_end) {
             p_rb->p_in = p_start;
         }
-        (p_rb->count)++;
-//        TODO funkitonsfähig machen
-        
-//        printf("hallo %c \n",  alphabet[pos_in_alphabet]);     
-//        printf("Zeichen %c wurde in den Ringbuffer geschrieben.",  alphabet[pos_in_alphabet]); 
+        (p_rb->count)++; 
         pos_in_alphabet++; //inkementiere die Stelle des Pointers im chararray (Alphabet)
         if(p_rb->count != 0) {
 //            printf("Buffer signalisiert, dass er nicht leer ist. \n");
@@ -235,7 +230,7 @@ void* read_rb(void *pid) {
             printf("%c \n", *(p_rb->p_out));
         }else{
             printf("%c", *(p_rb->p_out));
-            fflush(stdout); // cursor im output bleibt aug gleicher Zeile
+            fflush(stdout); // cursor im output bleibt auf gleicher Zeile
         }
         
         (p_rb->p_out)++;
@@ -253,3 +248,22 @@ void* read_rb(void *pid) {
     return (NULL);
 }
 
+/**
+ * 
+ * Danke TTT für die Hilfe mit der Char-Eingabe ohne Echo! :-)
+ * @return char
+ */
+char get_char() {    
+    static struct termios old, new;
+    char result;
+    
+    tcgetattr(0, &old); // grab old terminal i/o settings
+    new = old; // make new settings same as old settings
+    new.c_lflag &= ~ICANON; // disable buffered i/o
+    new.c_lflag &= ~ECHO; // set echo mode
+    tcsetattr(0, TCSANOW, &new); // use these new terminal i/o settings now
+    result = getchar();
+    tcsetattr(0, TCSANOW, &old);
+    
+    return result;
+}
