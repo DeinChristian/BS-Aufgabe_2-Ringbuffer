@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <sched.h>
 
 #include "main.h" // Header-Datei für Funktionen dieser Datei
 
@@ -30,6 +31,9 @@ int thread_id[4] = {0, 1, 2, 3};
 char lower_case_alphabet[] = "abcdefghijklmnopqrstuvwxyz"; //terminiert mit \0 also 27 Zeichen
 char capital_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; 
 int pos_in_alphabet = 0; //Position beider Alphabete
+//int producer_1_start_stop;
+//int producer_2_start_stop;
+//int consumer_start_stop;
 
 // Ringpuffer (rb) Struktur
 typedef struct {
@@ -50,12 +54,19 @@ rb *p_rb = &x; // Pointer auf Ringpuffer x (liefert die Adresse der ersten Stell
  * @param argv
  * @return EXIT_SUCCESS
  */
-int main(int argc, char** argv) { 
-    pthread_t threads[4]; //Feld, welches vier Elemente enthält. z.B. wie thread_id[4] oben im Quellcode
-    
+int main (int argc, char** argv) { 
     printf("Start der Simulation! \n");
     
-    //...
+    pthread_t threads[4]; //Feld, welches vier Elemente enthält. z.B. wie thread_id[4] oben im Quellcode
+    // Definition von Thread-Scheduling und Prioriät
+    pthread_attr_t  my_thread_attr; 
+    struct sched_param my_prio;
+    pthread_attr_init(&my_thread_attr);
+    pthread_attr_setinheritsched(&my_thread_attr, PTHREAD_EXPLICIT_SCHED);
+    pthread_attr_setschedpolicy(&my_thread_attr, SCHED_FIFO);
+    my_prio.sched_priority = 32;
+    pthread_attr_setschedparam(&my_thread_attr, &my_prio);
+    
     
     p_rb->p_in = p_start; // Setzen von p_in Pointer im Buffer auf p_start. auch p_rb.p_in = p_start möglich siehe RMP 08
     p_rb->p_out = p_start; // Setzen von p_out Pointer im Buffer auf p_start
@@ -64,10 +75,10 @@ int main(int argc, char** argv) {
     printf("Counter (im Buffer) ist %d. \n", p_rb -> count);
     
     // Threads starten
-    int thread0 = pthread_create(&threads[0], NULL, &p_1_w, (void *)thread_id);  //thread_id liefert die Adresse des ersten Feldes
-    int thread1 = pthread_create(&threads[1], NULL, &p_2_w, (void *)&thread_id[1]);
-    int thread2 = pthread_create(&threads[2], NULL, &consumer, (void *)&thread_id[2]);
-    int thread3 = pthread_create(&threads[3], NULL, &control, (void *)&thread_id[3]);
+    int thread0 = pthread_create(&threads[0], &my_thread_attr, &p_1_w, (void *)thread_id);  //thread_id liefert die Adresse des ersten Feldes
+    int thread1 = pthread_create(&threads[1], &my_thread_attr, &p_2_w, (void *)&thread_id[1]);
+    int thread2 = pthread_create(&threads[2], &my_thread_attr, &consumer, (void *)&thread_id[2]);
+    int thread3 = pthread_create(&threads[3], &my_thread_attr, &control, (void *)&thread_id[3]);
     
     // Fehlermeldung, wenn das Erstellen eines der Threads fehlschlägt.
     if (thread0 != 0 || thread1 != 0 || thread2 != 0 || thread3 != 0) {
@@ -92,8 +103,7 @@ int main(int argc, char** argv) {
  * @param pid Prozess-ID
  * @return 
  */
-void* p_1_w(void *pid) {
-    
+void* p_1_w(void *pid) {    
     return write_c(pid, (char *)lower_case_alphabet);
 }
 
@@ -103,8 +113,6 @@ void* p_1_w(void *pid) {
  * @return NULL
  */
 void* p_2_w(void *pid) {
-    
-    
    return write_c(pid, (char *)capital_alphabet);
 }
 
@@ -114,8 +122,6 @@ void* p_2_w(void *pid) {
  * @return NULL
  */
 void* consumer(void *pid) {
-    
-    
     return read_rb(pid);
 }
 
@@ -125,10 +131,27 @@ void* consumer(void *pid) {
  * @return NULL
  */
 void* control(void *pid) {
-    
-    printf("Start: Steuer-Thread mit Prozess-ID: %d. \n", *(int*)pid);
-    
-    return (NULL);
+    char c;
+    while(1){
+        switch( scanf("%c", &c) )
+        {
+            case '1' : NULL; break;
+            case '2' : NULL; break;
+            case 'c' :
+            case 'C' : NULL; break;
+            case 'q' :
+            case 'Q' : pthread_exit((int*)&thread_id[0]);
+                       pthread_exit((int*)&thread_id[1]);
+                       pthread_exit((int*)&thread_id[2]);
+                       return (EXIT_SUCCESS);
+
+            case 'h' : NULL; break;
+            default : ;
+        }  
+    }
+   
+//    printf("Start: Steuer-Thread mit Prozess-ID: %d. \n", *(int*)pid);
+   
 }
 
 /**
@@ -141,7 +164,7 @@ void* write_c(void *pid, char *alphabet) {
 //    int z_var = 0;
     
     
-    printf("Start: Schreiben von Prozess %d. \n", *(int*)pid);
+//    printf("Start: Schreiben von Prozess %d. \n", *(int*)pid);
     
     while(1) {
         i++;
@@ -151,28 +174,31 @@ void* write_c(void *pid, char *alphabet) {
          
         // Prüfung, ob der Ringbuffer voll ist
         while(p_rb->p_in == p_rb->p_out && p_rb->count == MAX) {
-            printf("Ringpuffer voll! Warten ... \n");
+//            printf("Ringpuffer voll! Warten ... \n");
             //Condition 'not_full_convar' ist eine Warteschlange, in die der Thread eingetragen wird.
             if(pthread_cond_wait(&not_full_condvar, &rb_mutex) != 0) {
                 handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
             } 
-            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
+//            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
         }
         
         if(alphabet[pos_in_alphabet] == '\0') { //ist das chararray (Alphabet) am Ende
             pos_in_alphabet = 0;                       // dann setze es wieder auf den Anfang
         } 
-        
+        sleep(3);
         *(p_rb->p_in) = alphabet[pos_in_alphabet]; //p_rb->p_in ist Adresse *(p_rb->p_in) ist Inhalt der Adresse, und dieser wird auf z_var gesetzt
         (p_rb->p_in)++; // die Adresse wird incrementiert -> hier um 4, weil int vier zeichen (chars ein zeichen)
         if(p_rb->p_in > p_end) {
             p_rb->p_in = p_start;
         }
         (p_rb->count)++;
+//        TODO funkitonsfähig machen
+        
+//        printf("hallo %c \n",  alphabet[pos_in_alphabet]);     
+//        printf("Zeichen %c wurde in den Ringbuffer geschrieben.",  alphabet[pos_in_alphabet]); 
         pos_in_alphabet++; //inkementiere die Stelle des Pointers im chararray (Alphabet)
-        printf("Zeichen %c wurde in den Ringbuffer geschrieben.",  *(p_rb->p_in)); // Für Chars: %s
         if(p_rb->count != 0) {
-            printf("Buffer signalisiert, dass er nicht leer ist. \n");
+//            printf("Buffer signalisiert, dass er nicht leer ist. \n");
             pthread_cond_signal(&not_empty_condvar);            
         }
         
@@ -190,7 +216,7 @@ void* write_c(void *pid, char *alphabet) {
 void* read_rb(void *pid) {
     int i = 0;
     
-    printf("Start: Lesen von Prozess %d. \n", *(int*)pid);
+//    printf("Start: Lesen von Prozess %d. \n", *(int*)pid);
     
     while(1) {
         i++;
@@ -198,19 +224,26 @@ void* read_rb(void *pid) {
         
         // Prüfung, ob der Ringbuffer leer ist
         while(p_rb->count == 0) {
-            printf("Ringpuffer leer! Warten ... \n");
+//            printf("Ringpuffer leer! Warten ... \n");
             pthread_cond_wait(&not_empty_condvar, &rb_mutex);
-            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
+//            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
         }
         
         (p_rb->count)--;
-        printf("Hinterstes Zeichen des Rings: %c. \n", *(p_rb->p_out));
+        sleep(2); //schläft für 2 Sekunden bevor der Thread das zeichen ausgibt
+        if(i%30 == 0){
+            printf("%c \n", *(p_rb->p_out));
+        }else{
+            printf("%c", *(p_rb->p_out));
+            fflush(stdout); // cursor im output bleibt aug gleicher Zeile
+        }
+        
         (p_rb->p_out)++;
         if(p_rb->p_out > p_end) {
             p_rb->p_out = p_start;
         }
         if(p_rb->count <= MAX) {
-            printf("Buffer signalisiert, dass er nicht voll ist. \n");
+//            printf("Buffer signalisiert, dass er nicht voll ist. \n");
             pthread_cond_signal(&not_full_condvar);
         }
         pthread_mutex_unlock(&rb_mutex);
