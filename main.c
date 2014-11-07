@@ -1,6 +1,5 @@
 /* 
  * File:   main.c
- * Author: Louisa Spahl
  *
  * Created on 3. November 2014, 21:05
  */
@@ -24,15 +23,18 @@
 pthread_mutex_t rb_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t not_empty_condvar = PTHREAD_COND_INITIALIZER;
 pthread_cond_t not_full_condvar = PTHREAD_COND_INITIALIZER;
+pthread_cond_t p1_signal_restart = PTHREAD_COND_INITIALIZER;
+pthread_cond_t p2_signal_restart = PTHREAD_COND_INITIALIZER;
+pthread_cond_t consumer_signal_restart = PTHREAD_COND_INITIALIZER;
 
 // Variablen
 int thread_id[4] = {0, 1, 2, 3};
 char lower_case_alphabet[] = "abcdefghijklmnopqrstuvwxyz"; //terminiert mit \0 also 27 Zeichen
 char capital_alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; 
 int pos_in_alphabet = 0; //Position beider Alphabete
-//int producer_1_start_stop;
-//int producer_2_start_stop;
-//int consumer_start_stop;
+int p1_stop = 0; // 0 = Soll laufen, 1 = soll stopppen
+int p2_stop = 0;
+int consumer_stop = 0;
 
 // Ringpuffer (rb) Struktur
 typedef struct {
@@ -103,7 +105,7 @@ int main (int argc, char** argv) {
  * @return 
  */
 void* p_1_w(void *pid) {    
-    return write_c(pid, (char *)lower_case_alphabet);
+    return write_c(pid, (char *)lower_case_alphabet, &p1_stop, &p1_signal_restart);
 }
 
 /**
@@ -112,7 +114,7 @@ void* p_1_w(void *pid) {
  * @return NULL
  */
 void* p_2_w(void *pid) {
-   return write_c(pid, (char *)capital_alphabet);
+   return write_c(pid, (char *)capital_alphabet, &p2_stop, &p2_signal_restart);
 }
 
 /**
@@ -135,22 +137,40 @@ void* control(void *pid) {
         chari = get_char();
         switch(chari)
         {
-            case '1' : NULL; break;
-            case '2' : NULL; break;
+            case '1' : if(p1_stop){
+                            pthread_cond_signal(&p1_signal_restart);  
+                            p1_stop = 0;
+                       }else{
+                            p1_stop = 1;
+                       } 
+                       break;
+            case '2' : if(p2_stop){
+                            pthread_cond_signal(&p2_signal_restart);  
+                            p2_stop = 0;
+                       }else{
+                            p2_stop = 1;
+                       } 
+                       break;
             case 'c' :
-            case 'C' : NULL; break;
+            case 'C' : if(consumer_stop){
+                            pthread_cond_signal(&consumer_signal_restart);  
+                            consumer_stop = 0;
+                       }else{
+                            consumer_stop = 1;
+                       } 
+                       break;
             case 'q' :
-            case 'Q' : pthread_exit((int*)&thread_id[1]);
-                       pthread_exit((int*)&thread_id[1]);
-                       pthread_exit((int*)&thread_id[2]);
+            case 'Q' : pthread_cancel(thread_id[1]);
+                       pthread_cancel(thread_id[1]);
+                       pthread_cancel(thread_id[2]);
                        return (EXIT_SUCCESS);
-
             case 'h' : printf("\n Folgende Tastatureingaben sind erlaubt: \n ");
                        printf(" 1: Start bzw. Stop von Poducer_1 \n ");
                        printf(" 2: Start bzw. Stop von Poducer_2 \n");
                        printf("c/C: Start bzw. Stop von Consumer \n");  
                        printf("q/Q: Terminierung der Threads, sodass der Main_Thread das System beendet \n");
-                       printf("  h: diese Liste von möglichen Eingaben lierfern \n"); break;
+                       printf("  h: diese Liste von möglichen Eingaben lierfern \n"); 
+                       break;
             default : ;
         }  
     } while(1);   
@@ -161,7 +181,7 @@ void* control(void *pid) {
  * @param pid Prozess-ID
  * @return NULL
  */
-void* write_c(void *pid, char *alphabet) {
+void* write_c(void *pid, char *alphabet, int *stop, pthread_cond_t *restart) {
     int i = 0;
 //    printf("Start: Schreiben von Prozess %d. \n", *(int*)pid);
     
@@ -172,19 +192,25 @@ void* write_c(void *pid, char *alphabet) {
         pthread_mutex_lock(&rb_mutex);
          
         // Prüfung, ob der Ringbuffer voll ist
-        while(p_rb->p_in == p_rb->p_out && p_rb->count == MAX) {
+        while(p_rb->p_in == p_rb->p_out && p_rb->count == MAX || *stop) {
 //            printf("Ringpuffer voll! Warten ... \n");
             //Condition 'not_full_convar' ist eine Warteschlange, in die der Thread eingetragen wird.
-            if(pthread_cond_wait(&not_full_condvar, &rb_mutex) != 0) {
-                handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
-            } 
-//            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
+            if(p_rb->p_in == p_rb->p_out && p_rb->count == MAX){
+                if(pthread_cond_wait(&not_full_condvar, &rb_mutex) != 0) {
+                    handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
+                } 
+            }else if(*stop){
+//                printf("producer stopped %d \n", *(int*)pid);
+                if(pthread_cond_wait(restart, &rb_mutex) != 0) {
+                    handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
+                } 
+            }         
         }
         
         if(alphabet[pos_in_alphabet] == '\0') { //ist das chararray (Alphabet) am Ende
             pos_in_alphabet = 0;                // dann setze es wieder auf den Anfang
         } 
-        sleep(3);
+//        sleep(3);
         *(p_rb->p_in) = alphabet[pos_in_alphabet];  //p_rb->p_in ist Adresse *(p_rb->p_in) ist Inhalt der Adresse, und dieser wird auf z_var gesetzt
         (p_rb->p_in)++;     // die Adresse wird incrementiert -> hier um 4, weil int vier zeichen (chars ein zeichen)
         if(p_rb->p_in > p_end) {
@@ -198,7 +224,7 @@ void* write_c(void *pid, char *alphabet) {
         }
         
         pthread_mutex_unlock(&rb_mutex);
-        sleep(1);
+        sleep(3);
     }
     return (NULL);
 }
@@ -211,21 +237,26 @@ void* write_c(void *pid, char *alphabet) {
 void* read_rb(void *pid) {
     int i = 0;
     
-//    printf("Start: Lesen von Prozess %d. \n", *(int*)pid);
-    
     while(1) {
         i++;
         pthread_mutex_lock(&rb_mutex);
         
         // Prüfung, ob der Ringbuffer leer ist
-        while(p_rb->count == 0) {
+        while(p_rb->count == 0 || consumer_stop) {
 //            printf("Ringpuffer leer! Warten ... \n");
-            pthread_cond_wait(&not_empty_condvar, &rb_mutex);
-//            printf("Prozess %d ist aufgewacht. Anzahl Zeichen im Ring: %d. \n", *(int*)pid, p_rb->count);            
+            if(p_rb->count == 0 ){
+                if(pthread_cond_wait(&not_empty_condvar, &rb_mutex) != 0) {
+                    handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
+                }                         
+            }else if(consumer_stop){
+                if(pthread_cond_wait(&consumer_signal_restart, &rb_mutex) != 0) {
+                    handle_error("Fehler beim Eintragen eines Threads in Condition-Warteschlange aufgetreten.");
+                } 
+            }
         }
         
         (p_rb->count)--;
-        sleep(2); //schläft für 2 Sekunden bevor der Thread das zeichen ausgibt
+//        sleep(2); //schläft für 2 Sekunden bevor der Thread das zeichen ausgibt
         if(i%30 == 0){
             printf("%c \n", *(p_rb->p_out));
         }else{
@@ -242,7 +273,7 @@ void* read_rb(void *pid) {
             pthread_cond_signal(&not_full_condvar);
         }
         pthread_mutex_unlock(&rb_mutex);
-        sleep(1);
+        sleep(2);
     }
     
     return (NULL);
